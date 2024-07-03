@@ -5,6 +5,7 @@ import argparse
 import inspect
 import subprocess as sp
 import sys
+from pathlib import Path
 from typing import Callable, Sequence
 
 
@@ -24,7 +25,9 @@ def ruff(fix: bool = False):
         cmd = ["ruff", "check"]
         if fix:
             cmd += ["--fix"]
-        cmd += ["src", "tests"]
+        cmd += ["src"]
+        if Path("tests").exists():
+            cmd += ["tests"]
         return sp.run(cmd).returncode
     message = f"Can't run with python {'.'.join(map(str, sys.version_info[:3]))}"
     raise ValueError(message)
@@ -37,40 +40,73 @@ def flake8() -> int:
 
 def mypy() -> int:
     r"""Run the mypy typer."""
+    cmd = ["mypy", "--config-file"]
     if sys.version_info >= (3, 7):
-        return sp.run(
-            ["mypy", "--config-file", "pyproject.toml", "--pretty", "src", "tests"]
-        ).returncode
+        cmd += ["pyproject.toml"]
     else:
-        return sp.run(
-            ["mypy", "--config-file", "mypy.ini", "--pretty", "src", "tests"]
-        ).returncode
+        cmd += ["mypy.ini"]
+    cmd += ["--pretty"]
+    if Path("src").exists():
+        cmd += ["src"]
+    else:
+        raise ValueError("No 'src' folder found.")
+    if Path("tests").exists():
+        cmd += ["tests"]
+    return sp.run(cmd).returncode
 
 
 def black() -> int:
     r"""Apply black."""
-    return sp.run(["black", "src", "tests"]).returncode
+    cmd = ["black"]
+    if Path("src").exists():
+        cmd += ["src"]
+    else:
+        raise ValueError("No 'src' folder found.")
+    if Path("tests").exists():
+        cmd += ["tests"]
+    return sp.run(cmd).returncode
 
 
 def black_check() -> int:
     r"""Check if black has been applied."""
-    return sp.run(["black", "--check", "src", "tests"]).returncode
+    cmd = ["black", "--check"]
+    if Path("src").exists():
+        cmd += ["src"]
+    else:
+        raise ValueError("No 'src' folder found.")
+    if Path("tests").exists():
+        cmd += ["tests"]
+    return sp.run(cmd).returncode
 
 
 def isort() -> int:
     r"""Apply isort."""
-    return sp.run(["isort", "src", "tests"]).returncode
+    cmd = ["isort"]
+    if Path("src").exists():
+        cmd += ["src"]
+    else:
+        raise ValueError("No 'src' folder found.")
+    if Path("tests").exists():
+        cmd += ["tests"]
+    return sp.run(cmd).returncode
 
 
 def isort_check() -> int:
     r"""Check if isort has been applied."""
-    return sp.run(["isort", "--check", "src", "tests"]).returncode
+    cmd = ["isort", "--check"]
+    if Path("src").exists():
+        cmd += ["src"]
+    else:
+        raise ValueError("No 'src' folder found.")
+    if Path("tests").exists():
+        cmd += ["tests"]
+    return sp.run(cmd).returncode
 
 
 def linting() -> int:
     r"""Apply black and isort, and check the linting with ruff/flake8 and mypy."""
     if sys.version_info >= (3, 7):
-        linting_functions = (black, isort, ruff, flake8, mypy)
+        linting_functions = (black, isort, ruff, mypy)
     else:
         linting_functions = (black, isort, flake8, mypy)
     return_code = _running_multiple_functions(linting_functions)
@@ -83,17 +119,13 @@ def linting() -> int:
 
 def test(name: str) -> int:
     r"""Run the given test."""
-    return sp.run(["salome_cosmos", "shell", "--", "pytest", "-vv", name]).returncode
+    return sp.run(["pytest", "-vv", name]).returncode
 
 
 def tests() -> int:
     r"""Run the tests."""
-    # return sp.run(["salome_cosmos", "shell", "--", "pytest", "-vv", "tests"]).returncode
     return sp.run(
         [
-            "salome_cosmos",
-            "shell",
-            "--",
             "pytest",
             "-vv",
             "-n",
@@ -107,17 +139,12 @@ def tests() -> int:
 
 def tests_failed() -> int:
     r"""Run the last failed tests."""
-    return sp.run(
-        ["salome_cosmos", "shell", "--", "pytest", "-vv", "--lf", "tests"]
-    ).returncode
+    return sp.run(["pytest", "-vv", "--lf", "tests"]).returncode
 
 
 def tests_cov(xml: bool = False, html: bool = False) -> int:
     r"""Run the tests with coverage."""
     cmd = [
-        "salome_cosmos",
-        "shell",
-        "--",
         "pytest",
         "-n",
         "auto",
@@ -131,22 +158,22 @@ def tests_cov(xml: bool = False, html: bool = False) -> int:
     cmd += ["--cov=cosmos", "--cov-report=term-missing:skip-covered", "-vv", "tests"]
     return_code = sp.run(cmd).returncode
     if return_code == 0 and xml:
-        return_code = sp.run(
-            ["salome_cosmos", "shell", "--", "python", "-m", "coverage", "xml"]
-        ).returncode
+        return_code = sp.run(["python", "-m", "coverage", "xml"]).returncode
     return return_code
 
 
-def icons() -> int:
+def icons(package_name: str) -> int:
     r"""Generate the icons.py file."""
+    if not Path("src", package_name).exists():
+        raise ValueError(f"'{package_name}' is not in the 'src' folder")
     return sp.run(
         [
             "pyrcc5",
             # "-name",
             # "initialize",
-            "src/phimecabase/icons/icons.qrc",
+            f"src/{package_name}/icons/icons.qrc",
             "-o",
-            "src/phimecabase/icons/icons.py",
+            f"src/{package_name}/icons/icons.py",
         ]
     ).returncode
 
