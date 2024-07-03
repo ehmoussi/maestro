@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+keywords = ["maestro", "black", "ruff", "isort", "mypy", "pytest"]
+name = "maestro"
+authors = [{ name = "El Hadi Moussi", email = "moussi@phimeca.com" }]
+description = "Run commands to manage a python package."
+readme = "README.md"
+requires-python = ">=3.7"
+dependencies = [
+    "pytest",
+    "pytest-cov",
+    "pytest-xdist",
+    "ruff",
+    "mypy",
+    "black",
+    "isort[requirements_deprecated_finder]",
+    "wheel",
+]
+dynamic = ["version"]
+
+[project.scripts]
+maestro = "maestro.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["maestro"]
+
+[tool.setuptools.dynamic]
+version = { attr = "maestro.__version__" }
+
+[tool.black]
+line-length = 95
