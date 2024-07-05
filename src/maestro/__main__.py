@@ -155,7 +155,7 @@ def tests_cov(xml: bool = False, html: bool = False) -> int:
         cmd += ["--cov-report=xml", "--junitxml=report.xml"]
     if html:
         cmd += ["--cov-report=html"]
-    cmd += ["--cov=cosmos", "--cov-report=term-missing:skip-covered", "-vv", "tests"]
+    cmd += ["--cov=src", "--cov-report=term-missing:skip-covered", "-vv", "tests"]
     return_code = sp.run(cmd).returncode
     if return_code == 0 and xml:
         return_code = sp.run(["python", "-m", "coverage", "xml"]).returncode
