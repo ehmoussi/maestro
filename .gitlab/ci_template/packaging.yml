@@ -1,0 +1,12 @@
+.wheel:
+    stage: packaging
+    script:
+        - maestro wheel --no-deps
+    artifacts:
+        name: $PROJECT_NAME
+        paths:
+          - $PROJECT_NAME-*.whl
+        expire_in: 1 day
+    only:
+        - tags
+        - master

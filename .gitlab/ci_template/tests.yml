@@ -1,0 +1,9 @@
+.tests:
+    stage: tests
+    needs: []
+    script:
+        - maestro tests_cov --xml
+    artifacts:
+      reports:
+        junit: report.xml
+        cobertura: coverage.xml
