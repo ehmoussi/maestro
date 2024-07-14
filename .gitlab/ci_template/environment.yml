@@ -1,0 +1,58 @@
+.manylinux2014:
+    tags:
+        - docker
+        - calcul-5
+    image:
+        name: quay.io/pypa/manylinux2014_x86_64
+    before_script:
+        - if [ ! -d ".env" ]; then $PYTHON_EXE_PATH -m venv .env; else echo ".env exists"; fi
+        - source .env/bin/activate
+        - python -m pip install --upgrade pip
+        - python -m pip install -e .
+    cache:
+        key: $CACHE_KEY
+        paths:
+            - .env
+
+.py37:
+    variables:
+        PYTHON_EXE_PATH: /opt/python/cp37-cp37m/bin/python
+        CACHE_KEY: "py37"
+    extends:
+        - .manylinux2014
+
+.py38:
+    variables:
+        PYTHON_EXE_PATH: /opt/python/cp38-cp38/bin/python
+        CACHE_KEY: "py38"
+    extends:
+        - .manylinux2014
+
+.py39:
+    variables:
+        PYTHON_EXE_PATH: /opt/python/cp39-cp39/bin/python
+        CACHE_KEY: "py39"
+    extends:
+        - .manylinux2014
+
+
+.py310:
+    variables:
+        PYTHON_EXE_PATH: /opt/python/cp310-cp310/bin/python
+        CACHE_KEY: "py310"
+    extends:
+        - .manylinux2014
+
+.py311:
+    variables:
+        PYTHON_EXE_PATH: /opt/python/cp311-cp311/bin/python
+        CACHE_KEY: "py311"
+    extends:
+        - .manylinux2014
+
+.py312:
+    variables:
+        PYTHON_EXE_PATH: /opt/python/cp312-cp312/bin/python
+        CACHE_KEY: "py312"
+    extends:
+        - .manylinux2014

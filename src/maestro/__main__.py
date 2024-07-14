@@ -1,25 +1,40 @@
-# -*- coding: utf-8 -*-
-r"""Makefile of the project."""
+"""Commands of maestro."""
 
-import argparse
-import inspect
 import subprocess as sp
 import sys
 from pathlib import Path
-from typing import Callable, Sequence
+from typing import List, Optional
+
+import typer
+from rich.console import Console
+from rich.progress import BarColumn, Progress, TextColumn
+from rich.prompt import Prompt
+from rich.table import Column
+from typing_extensions import Annotated
+
+CONSOLE = Console()
+app = typer.Typer(
+    no_args_is_help=True, context_settings={"help_option_names": ["-h", "--help"]}
+)
 
 
-def wheel(no_deps: bool = False, wheel_dir: str = ".") -> int:
-    r"""Build a wheel of the package."""
-    cmd = ["python", "-m", "pip", "wheel"]
-    if no_deps:
-        cmd += ["--no-deps"]
-    cmd += ["--wheel-dir", wheel_dir]
-    cmd += ["."]
-    return sp.run(cmd).returncode
+def run_command(cmd: List[str]) -> int:
+    process = sp.run(
+        cmd, stdout=CONSOLE.file, stderr=CONSOLE.file, text=True, encoding="utf-8"
+    )
+    return process.returncode
 
 
-def ruff(fix: bool = False):
+def find_packages_in_src() -> List[str]:
+    packages = []
+    for p in Path("src").iterdir():
+        if p.is_dir() and Path(p, "__init__.py").exists():
+            packages.append(p.name)
+    return packages
+
+
+@app.command()
+def ruff(fix: bool = False) -> int:
     r"""Run the ruff linter."""
     if sys.version_info >= (3, 7):
         cmd = ["ruff", "check"]
@@ -28,23 +43,35 @@ def ruff(fix: bool = False):
         cmd += ["src"]
         if Path("tests").exists():
             cmd += ["tests"]
-        return sp.run(cmd).returncode
-    message = f"Can't run with python {'.'.join(map(str, sys.version_info[:3]))}"
-    raise ValueError(message)
+        return run_command(cmd)
+    else:
+        message = f"Can't run with python {'.'.join(map(str, sys.version_info[:3]))}"
+        raise ValueError(message)
 
 
+@app.command()
 def flake8() -> int:
     r"""Run the flake8 linter."""
-    return sp.run(["flake8", "src", "tests"]).returncode
+    cmd = ["flake8", "src", "tests"]
+    return run_command(cmd)
 
 
-def mypy() -> int:
+typer.Argument()
+
+
+@app.command()
+def mypy(
+    config_file: Annotated[Optional[Path], typer.Option("--config_file", "-c")] = None,
+) -> int:
     r"""Run the mypy typer."""
     cmd = ["mypy", "--config-file"]
-    if sys.version_info >= (3, 7):
-        cmd += ["pyproject.toml"]
+    if config_file is None:
+        if sys.version_info >= (3, 7):
+            cmd += ["pyproject.toml"]
+        else:
+            cmd += ["mypy.ini"]
     else:
-        cmd += ["mypy.ini"]
+        cmd += [str(config_file)]
     cmd += ["--pretty"]
     if Path("src").exists():
         cmd += ["src"]
@@ -52,190 +79,137 @@ def mypy() -> int:
         raise ValueError("No 'src' folder found.")
     if Path("tests").exists():
         cmd += ["tests"]
-    return sp.run(cmd).returncode
+    return run_command(cmd)
 
 
-def black() -> int:
+@app.command()
+def black(check: bool = False) -> int:
     r"""Apply black."""
     cmd = ["black"]
+    if check:
+        cmd += ["--check"]
     if Path("src").exists():
         cmd += ["src"]
     else:
         raise ValueError("No 'src' folder found.")
     if Path("tests").exists():
         cmd += ["tests"]
-    return sp.run(cmd).returncode
+    return run_command(cmd)
 
 
-def black_check() -> int:
-    r"""Check if black has been applied."""
-    cmd = ["black", "--check"]
-    if Path("src").exists():
-        cmd += ["src"]
-    else:
-        raise ValueError("No 'src' folder found.")
-    if Path("tests").exists():
-        cmd += ["tests"]
-    return sp.run(cmd).returncode
-
-
-def isort() -> int:
+@app.command()
+def isort(check: bool = False) -> int:
     r"""Apply isort."""
     cmd = ["isort"]
+    if check:
+        cmd += ["--check"]
     if Path("src").exists():
         cmd += ["src"]
     else:
         raise ValueError("No 'src' folder found.")
     if Path("tests").exists():
         cmd += ["tests"]
-    return sp.run(cmd).returncode
+    return run_command(cmd)
 
 
-def isort_check() -> int:
-    r"""Check if isort has been applied."""
-    cmd = ["isort", "--check"]
-    if Path("src").exists():
-        cmd += ["src"]
-    else:
-        raise ValueError("No 'src' folder found.")
-    if Path("tests").exists():
-        cmd += ["tests"]
-    return sp.run(cmd).returncode
-
-
+@app.command()
 def linting() -> int:
-    r"""Apply black and isort, and check the linting with ruff/flake8 and mypy."""
-    if sys.version_info >= (3, 7):
-        linting_functions = (black, isort, ruff, mypy)
-    else:
-        linting_functions = (black, isort, flake8, mypy)
-    return_code = _running_multiple_functions(linting_functions)
-    if return_code == 0:
-        print("Everything is ok !")  # noqa: T201
-    else:
-        print("Oops !")  # noqa: T201
+    r"""Apply black and isort, check linting with ruff and the type with mypy."""
+    return_code = 0
+    with Progress(
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(bar_width=None, table_column=Column(ratio=2)),
+        auto_refresh=False,
+    ) as progress:
+        task = progress.add_task(description="Linting", total=4)
+        if sys.version_info >= (3, 7):
+            linting_functions = (black, isort, ruff, mypy)
+        else:
+            linting_functions = (black, isort, flake8, mypy)
+        for f in linting_functions:
+            progress.update(task, description=f"{f.__name__} start", refresh=True)
+            return_code = f()  # type: ignore[operator]
+            if return_code == 0:
+                progress.update(task, description=f"{f.__name__} Ok", advance=1, refresh=True)
+            else:
+                progress.update(task, description=f"{f.__name__} failed", refresh=True)
+                break
+        if return_code == 0:
+            progress.update(task, description="Linting Ok", refresh=True)
     return return_code
 
 
-def test(name: str) -> int:
-    r"""Run the given test."""
-    return sp.run(["pytest", "-vv", name]).returncode
-
-
-def tests() -> int:
+@app.command()
+def test(
+    file_or_dir: Annotated[Optional[List[str]], typer.Argument()] = None,
+    parallel: bool = False,
+    failed: bool = False,
+    coverage: bool = False,
+    xml: bool = False,
+    html: bool = False,
+) -> int:
     r"""Run the tests."""
-    return sp.run(
-        [
-            "pytest",
-            "-vv",
-            "-n",
-            "auto",
-            "--dist",
-            "loadfile",
-            "tests",
-        ]
-    ).returncode
+    cmd = ["pytest", "-vv"]
+    if parallel:
+        cmd += ["-n", "auto", "--dist", "loadfile"]
+    if failed:
+        cmd += ["--lf"]
+    if coverage:
+        cmd += ["--cov=src", "--cov-report=term-missing:skip-covered"]
+        if xml:
+            cmd += ["--cov-report=xml", "--junitxml=report.xml"]
+        if html:
+            cmd += ["--cov-report=html"]
+    if file_or_dir is None:
+        cmd += ["tests"]
+    else:
+        cmd += file_or_dir
+    return run_command(cmd)
 
 
-def tests_failed() -> int:
-    r"""Run the last failed tests."""
-    return sp.run(["pytest", "-vv", "--lf", "tests"]).returncode
+@app.command()
+def wheel(wheel_dir: Path, all_deps: bool = False) -> int:
+    r"""Build a wheel of the package."""
+    if not wheel_dir.exists():
+        wheel_dir.mkdir()
+    if not wheel_dir.is_dir():
+        raise ValueError(f"{wheel_dir} is not a directory")
+    if wheel_dir.absolute() == Path.cwd() and all_deps:
+        typer.confirm(
+            "All the wheels of the dependencies will be created in the current directory. "
+            "Are you sure ?",
+            abort=True,
+        )
+    cmd = ["python", "-m", "pip", "wheel"]
+    if not all_deps:
+        cmd += ["--no-deps"]
+    cmd += ["--wheel-dir", str(wheel_dir)]
+    cmd += ["."]
+    return run_command(cmd)
 
 
-def tests_cov(xml: bool = False, html: bool = False) -> int:
-    r"""Run the tests with coverage."""
-    cmd = [
-        "pytest",
-        "-n",
-        "auto",
-        "--dist",
-        "loadfile",
-    ]
-    if xml:
-        cmd += ["--cov-report=xml", "--junitxml=report.xml"]
-    if html:
-        cmd += ["--cov-report=html"]
-    cmd += ["--cov=src", "--cov-report=term-missing:skip-covered", "-vv", "tests"]
-    return_code = sp.run(cmd).returncode
-    if return_code == 0 and xml:
-        return_code = sp.run(["python", "-m", "coverage", "xml"]).returncode
-    return return_code
-
-
-def icons(package_name: str) -> int:
-    r"""Generate the icons.py file."""
-    if not Path("src", package_name).exists():
-        raise ValueError(f"'{package_name}' is not in the 'src' folder")
+@app.command()
+def icons() -> int:
+    r"""Generate the icons.py file from the qrc file."""
+    packages = find_packages_in_src()
+    package_name = Prompt.ask("Select a package", choices=packages, default=packages[0])
+    qrc_file = Path("src", package_name, "icons", "icons.qrc")
+    if not qrc_file.exists():
+        CONSOLE.print(f"'{qrc_file}' doesn't exists")
+        qrc_file_str = Prompt.ask("Enter the qrc file path")
+        qrc_file = Path(qrc_file_str)
+    if not qrc_file.is_file():
+        raise ValueError(f"'{qrc_file}' is not a file.")
+    if not qrc_file.exists():
+        raise ValueError(f"'{qrc_file}' doesn't exists. Can't generate the 'icons.py' file.")
+    py_file = Path(qrc_file.parent, "icons.py")
     return sp.run(
         [
             "pyrcc5",
             # "-name",
             # "initialize",
-            f"src/{package_name}/icons/icons.qrc",
+            qrc_file,
             "-o",
-            f"src/{package_name}/icons/icons.py",
+            py_file,
         ]
     ).returncode
-
-
-def _running_multiple_functions(
-    functions: Sequence[Callable[..., int]], with_print: bool = True, **kwargs
-) -> int:
-    for f in functions:
-        if with_print:
-            print(f"Running {f.__name__} ...")  # noqa: T201
-        return_code = f(**kwargs)
-        if return_code != 0:
-            if with_print:
-                print(f"{f.__name__} failed ...")  # noqa: T201
-            return return_code
-        if with_print:
-            print(f"{f.__name__} done ...")  # noqa: T201
-    return 0
-
-
-def _get_functions():
-    return [
-        obj
-        for name, obj in inspect.getmembers(sys.modules[__name__])
-        if inspect.isfunction(obj) and not name.startswith("_") and name != "main"
-    ]
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers()
-    parsers_functions = {}
-    for f in _get_functions():
-        parser_function = subparsers.add_parser(f.__name__, help=f.__doc__)
-        parser_function.set_defaults(func=f)
-        f_signature = inspect.signature(f)
-        for var_name, var_value in f_signature.parameters.items():
-            options = {}
-            if var_value.default is not inspect._empty:  # noqa: SLF001
-                options = {"default": var_value.default}
-            if var_value.annotation is bool:
-                options["action"] = "store_true"
-            else:
-                options["type"] = var_value.annotation
-            parser_function.add_argument(f"--{var_name.replace('_', '-')}", **options)
-        parsers_functions[f.__name__] = parser_function
-    # parsing
-    args = parser.parse_args()
-    func_kwargs = {
-        keyword: getattr(args, keyword)
-        for keyword in dir(args)
-        if (
-            not keyword.startswith("_")
-            and keyword != "func"
-            and getattr(args, keyword) is not inspect._empty  # noqa: SLF001
-        )
-    }
-    if hasattr(args, "func"):
-        return args.func(**func_kwargs)
-    else:
-        parser.print_help()
-
-
-if __name__ == "__main__":
-    sys.exit(main())
