@@ -8,7 +8,7 @@ name = "maestro"
 authors = [{ name = "El Hadi Moussi", email = "moussi@phimeca.com" }]
 description = "Run commands to manage a python package."
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.6"
 dependencies = [
     "pytest",
     "pytest-cov",
