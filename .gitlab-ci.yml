@@ -1,0 +1,63 @@
+stages:
+    - linting
+    - typing
+    - tests
+    - packaging
+
+include:
+    - ".gitlab/ci_template/environment.yml"
+    - ".gitlab/ci_template/linting.yml"
+    - ".gitlab/ci_template/packaging.yml"
+
+variables:
+    PROJECT_NAME: "myapp"
+
+
+
+black:
+    extends:
+        - .py310
+        - .black
+
+
+ruff:
+    extends:
+        - .py310
+        - .ruff
+
+
+isort:
+    extends:
+        - .py310
+        - .isort
+
+
+mypy_py37:
+    extends:
+        - .py37
+        - .mypy
+
+mypy_py38:
+    extends:
+        - .py38
+        - .mypy
+
+mypy_py39:
+    extends:
+        - .py39
+        - .mypy
+
+mypy_py310:
+    extends:
+        - .py310
+        - .mypy
+
+mypy_py311:
+    extends:
+        - .py311
+        - .mypy
+
+mypy_py312:
+    extends:
+        - .py312
+        - .mypy
