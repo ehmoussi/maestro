@@ -1,9 +1,6 @@
 """Commands of maestro."""
 
-import subprocess as sp
-import sys
-from pathlib import Path
-from typing import List, Optional
+from maestro import pyprojecttoml
 
 import typer
 from rich.console import Console
@@ -12,80 +9,179 @@ from rich.prompt import Prompt
 from rich.table import Column
 from typing_extensions import Annotated
 
+import itertools
+import subprocess as sp
+import sys
+from enum import Enum
+from pathlib import Path
+from typing import List, Optional
+
 CONSOLE = Console()
 app = typer.Typer(
-    no_args_is_help=True, context_settings={"help_option_names": ["-h", "--help"]}
+    no_args_is_help=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
+app.add_typer(pyprojecttoml.app, name="pyproject")
 
 
-def run_command(cmd: List[str]) -> int:
-    process = sp.run(
-        cmd, stdout=CONSOLE.file, stderr=CONSOLE.file, text=True, encoding="utf-8"
-    )
-    return process.returncode
+def run_command(cmd: List[str], with_exit: bool = True) -> int:
+    if sys.version_info >= (3, 7):  # noqa: UP036
+        process = sp.run(
+            cmd,
+            check=False,
+            stdout=CONSOLE.file,
+            stderr=CONSOLE.file,
+            text=True,
+            encoding="utf-8",
+        )
+    else:
+        process = sp.run(
+            cmd,
+            check=False,
+            stdout=CONSOLE.file,
+            stderr=CONSOLE.file,
+            universal_newlines=True,  # noqa: UP021
+            encoding="utf-8",
+        )
+    return_code = process.returncode
+    if with_exit and return_code != 0:
+        raise typer.Exit(return_code)
+    else:
+        return return_code
 
 
 def find_packages_in_src() -> List[str]:
-    packages = []
-    for p in Path("src").iterdir():
-        if p.is_dir() and Path(p, "__init__.py").exists():
-            packages.append(p.name)
-    return packages
+    return [
+        p.name for p in Path("src").iterdir() if p.is_dir() and Path(p, "__init__.py").exists()
+    ]
 
 
 @app.command()
-def ruff(fix: bool = False) -> int:
-    r"""Run the ruff linter."""
-    if sys.version_info >= (3, 7):
+def ruff(
+    fix: bool = False,
+    config: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--config",
+            "-c",
+            help="Replace the default config file",
+        ),
+    ] = None,
+    show_config: Annotated[
+        Optional[bool],
+        typer.Option("--show-config", "-s"),
+    ] = False,
+) -> int:
+    """Run the ruff linter."""
+    if sys.version_info >= (3, 7):  # noqa: UP036
+        default_config = Path("pyproject.toml")
         cmd = ["ruff", "check"]
+        if config is None:
+            config = default_config
+        if config.exists():
+            cmd += ["--config", str(config)]
+        else:
+            msg = f"The file {config} doesn't exist"
+            raise ValueError(msg)
         if fix:
             cmd += ["--fix"]
         cmd += ["src"]
         if Path("tests").exists():
             cmd += ["tests"]
-        return run_command(cmd)
+        if show_config:
+            CONSOLE.print(default_config.read_text())
+            return 0
+        else:
+            return run_command(cmd)
     else:
         message = f"Can't run with python {'.'.join(map(str, sys.version_info[:3]))}"
         raise ValueError(message)
 
 
 @app.command()
-def flake8() -> int:
+def flake8(
+    config: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--config",
+            "-c",
+            help="Replace the default config file",
+        ),
+    ] = None,
+    append_config: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--append-config",
+            "-a",
+            help="Append the default config file",
+        ),
+    ] = None,
+    show_default_config: Annotated[
+        Optional[bool],
+        typer.Option("--show-default-config", "-d"),
+    ] = False,
+) -> int:
     r"""Run the flake8 linter."""
-    cmd = ["flake8", "src", "tests"]
+    default_config = Path(Path(__file__).parent, "cfg", "flake8")
+    if show_default_config:
+        CONSOLE.print(default_config.read_text())
+        return 0
+    if config is None:
+        config = default_config
+    if config.exists():
+        cmd = ["flake8", "--config", str(config)]
+    else:
+        msg = f"The file {config} doesn't exist"
+        raise ValueError(msg)
+    if append_config is None:
+        append_config = Path("setup.cfg")
+    if append_config.exists():
+        cmd += ["--append-config", str(append_config)]
+    else:
+        msg = f"The file {append_config} doesn't exist"
+        raise ValueError(msg)
+    cmd += ["src", "tests"]
     return run_command(cmd)
-
-
-typer.Argument()
 
 
 @app.command()
 def mypy(
-    config_file: Annotated[Optional[Path], typer.Option("--config_file", "-c")] = None,
+    config_file: Annotated[
+        Optional[Path],
+        typer.Option("--config_file", "-c"),
+    ] = None,
 ) -> int:
     r"""Run the mypy typer."""
     cmd = ["mypy", "--config-file"]
     if config_file is None:
-        if sys.version_info >= (3, 7):
-            cmd += ["pyproject.toml"]
+        if sys.version_info >= (3, 7):  # noqa: UP036
+            config_file = Path("pyproject.toml")
         else:
-            cmd += ["mypy.ini"]
-    else:
-        cmd += [str(config_file)]
-    cmd += ["--pretty"]
+            config_file = Path("mypy.ini")
+    if not config_file.exists():
+        msg = f"The file {config_file} doesn't exist"
+        raise ValueError(msg)
+    cmd += [str(config_file)]
+    cmd += ["--pretty", "--warn-unused-configs"]
     if Path("src").exists():
         cmd += ["src"]
     else:
         raise ValueError("No 'src' folder found.")
-    if Path("tests").exists():
+    if next(Path("tests").glob("**/*.py"), None) is not None:
         cmd += ["tests"]
     return run_command(cmd)
 
 
 @app.command()
-def black(check: bool = False) -> int:
+def black(
+    check: bool = False,
+    line_length: Annotated[
+        Optional[int],
+        typer.Option("--line_length", "-l"),
+    ] = 95,
+) -> int:
     r"""Apply black."""
-    cmd = ["black"]
+    cmd = ["black", "-l", str(line_length)]
     if check:
         cmd += ["--check"]
     if Path("src").exists():
@@ -98,9 +194,30 @@ def black(check: bool = False) -> int:
 
 
 @app.command()
-def isort(check: bool = False) -> int:
+def isort(
+    check: bool = False,
+    config: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--config",
+            "-c",
+            help="Replace the default config file",
+        ),
+    ] = None,
+    show_config: Annotated[
+        Optional[bool],
+        typer.Option("--show-config", "-s"),
+    ] = False,
+) -> int:
     r"""Apply isort."""
-    cmd = ["isort"]
+    default_config = Path("pyproject.toml")
+    if config is None:
+        config = default_config
+    if config.exists():
+        cmd = ["isort", "--settings-file", str(config)]
+    else:
+        msg = f"The file {config} doesn't exist"
+        raise ValueError(msg)
     if check:
         cmd += ["--check"]
     if Path("src").exists():
@@ -109,57 +226,120 @@ def isort(check: bool = False) -> int:
         raise ValueError("No 'src' folder found.")
     if Path("tests").exists():
         cmd += ["tests"]
-    return run_command(cmd)
+    if show_config:
+        CONSOLE.print(default_config.read_text())
+        return 0
+    else:
+        return_code = run_command(cmd, with_exit=False)
+        if return_code == 0:
+            CONSOLE.print("Isort done.")
+        else:
+            raise typer.Exit(return_code)
+        return return_code
 
 
 @app.command()
 def linting() -> int:
-    r"""Apply black and isort, check linting with ruff and the type with mypy."""
+    """Apply black, isort, linting with ruff and check types with mypy."""
     return_code = 0
     with Progress(
-        TextColumn("[progress.description]{task.description}"),
+        TextColumn(
+            "[progress.description]{task.description} ({task.completed} of {task.total})"
+        ),
         BarColumn(bar_width=None, table_column=Column(ratio=2)),
         auto_refresh=False,
     ) as progress:
         task = progress.add_task(description="Linting", total=4)
-        if sys.version_info >= (3, 7):
+        if sys.version_info >= (3, 7):  # noqa: UP036
             linting_functions = (black, isort, ruff, mypy)
         else:
             linting_functions = (black, isort, flake8, mypy)
         for f in linting_functions:
-            progress.update(task, description=f"{f.__name__} start", refresh=True)
-            return_code = f()  # type: ignore[operator]
+            progress.update(task, description=f"{f.__name__} start")
+            try:
+                return_code = f()  # type: ignore[operator]
+            except typer.Exit as e:
+                return_code = e.exit_code
             if return_code == 0:
-                progress.update(task, description=f"{f.__name__} Ok", advance=1, refresh=True)
+                progress.update(task, description=f"{f.__name__} Ok")
+                progress.advance(task)
             else:
-                progress.update(task, description=f"{f.__name__} failed", refresh=True)
+                progress.update(task, description=f"{f.__name__} failed")
                 break
+            progress.refresh()
         if return_code == 0:
-            progress.update(task, description="Linting Ok", refresh=True)
+            progress.update(task, description="Linting Ok")
+            progress.refresh()
+    if return_code == 0:
+        CONSOLE.print(":party_popper: Nice! :party_popper:", emoji=True)
+    else:
+        CONSOLE.print(":loudly_crying_face: Oh no!! :loudly_crying_face:", emoji=True)
+        raise typer.Exit(return_code)
     return return_code
+
+
+class CoverageReport(Enum):
+    XML = "xml"
+    HTML = "html"
+
+    def __str__(self) -> str:
+        return self.value
+
+    def __repr__(self) -> str:
+        return self.value
+
+    def __format__(self, _: str) -> str:
+        return self.value
 
 
 @app.command()
 def test(
-    file_or_dir: Annotated[Optional[List[str]], typer.Argument()] = None,
-    parallel: bool = False,
-    failed: bool = False,
-    coverage: bool = False,
-    xml: bool = False,
-    html: bool = False,
+    file_or_dir: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Path to the test file or directory"),
+    ] = None,
+    parallel: Annotated[
+        bool,
+        typer.Option(
+            "--parallel",
+            "-p",
+            help="Run in parallel grouped by file",
+        ),
+    ] = False,
+    only_failed: Annotated[
+        bool,
+        typer.Option(
+            "--only-failed",
+            "-lf",
+            help="Run only the tests that failed at the last run",
+        ),
+    ] = False,
+    coverage: Annotated[
+        bool,
+        typer.Option("--coverage", "--cov", help="Add coverage"),
+    ] = False,
+    coverage_report: Annotated[
+        Optional[List[CoverageReport]],
+        typer.Option(
+            "--coverage-report",
+            "--cov-report",
+            help="Add coverage and generate an xml or/and html report",
+        ),
+    ] = None,
 ) -> int:
     r"""Run the tests."""
     cmd = ["pytest", "-vv"]
     if parallel:
         cmd += ["-n", "auto", "--dist", "loadfile"]
-    if failed:
+    if only_failed:
         cmd += ["--lf"]
-    if coverage:
+    if coverage or coverage_report is not None:
         cmd += ["--cov=src", "--cov-report=term-missing:skip-covered"]
-        if xml:
-            cmd += ["--cov-report=xml", "--junitxml=report.xml"]
-        if html:
-            cmd += ["--cov-report=html"]
+        if coverage_report is not None:
+            if "xml" in map(str, coverage_report):
+                cmd += ["--cov-report=xml", "--junitxml=report.xml"]
+            if "html" in map(str, coverage_report):
+                cmd += ["--cov-report=html"]
     if file_or_dir is None:
         cmd += ["tests"]
     else:
@@ -168,12 +348,30 @@ def test(
 
 
 @app.command()
-def wheel(wheel_dir: Path, all_deps: bool = False) -> int:
+def wheel(
+    wheel_dir: Annotated[
+        Path,
+        typer.Argument(
+            ...,
+            metavar="DIR",
+            help="Build wheel(s) into DIR",
+        ),
+    ],
+    all_deps: Annotated[
+        bool,
+        typer.Option(
+            "--all-deps",
+            "--all",
+            help="Build wheel of the package dependencies",
+        ),
+    ] = False,
+) -> int:
     r"""Build a wheel of the package."""
     if not wheel_dir.exists():
         wheel_dir.mkdir()
     if not wheel_dir.is_dir():
-        raise ValueError(f"{wheel_dir} is not a directory")
+        msg = f"{wheel_dir} is not a directory"
+        raise ValueError(msg)
     if wheel_dir.absolute() == Path.cwd() and all_deps:
         typer.confirm(
             "All the wheels of the dependencies will be created in the current directory. "
@@ -190,7 +388,7 @@ def wheel(wheel_dir: Path, all_deps: bool = False) -> int:
 
 @app.command()
 def icons() -> int:
-    r"""Generate the icons.py file from the qrc file."""
+    """Generate the icons.py file from the qrc file."""
     packages = find_packages_in_src()
     package_name = Prompt.ask("Select a package", choices=packages, default=packages[0])
     qrc_file = Path("src", package_name, "icons", "icons.qrc")
@@ -199,17 +397,106 @@ def icons() -> int:
         qrc_file_str = Prompt.ask("Enter the qrc file path")
         qrc_file = Path(qrc_file_str)
     if not qrc_file.is_file():
-        raise ValueError(f"'{qrc_file}' is not a file.")
+        msg = f"'{qrc_file}' is not a file."
+        raise ValueError(msg)
     if not qrc_file.exists():
-        raise ValueError(f"'{qrc_file}' doesn't exists. Can't generate the 'icons.py' file.")
+        msg = f"'{qrc_file}' doesn't exists. Can't generate the 'icons.py' file."
+        raise ValueError(msg)
     py_file = Path(qrc_file.parent, "icons.py")
-    return sp.run(
+    return run_command(
         [
             "pyrcc5",
             # "-name",
             # "initialize",
-            qrc_file,
+            str(qrc_file),
             "-o",
-            py_file,
+            str(py_file),
         ]
-    ).returncode
+    )
+
+
+@app.command()
+def vscode(
+    forced: Annotated[
+        bool, typer.Option("--forced", "-f", help="Replace all the files")
+    ] = False
+) -> int:
+    """Generate the settings for VS Code."""
+    maestro_cfg_path = Path(Path(__file__).parent, "cfg")
+    maestro_vscode_path = Path(Path(__file__).parent, "vscode")
+    vscode_path = Path(Path.cwd(), ".vscode")
+    for maestro_file in itertools.chain(
+        maestro_vscode_path.iterdir(), maestro_cfg_path.iterdir()
+    ):
+        if maestro_file.stem == "flake8":
+            continue
+        vscode_file = Path(vscode_path, maestro_file.name)
+        can_replace = True
+        display_path = f"{vscode_path.name}/{vscode_file.name}"
+        if not forced and vscode_file.exists():
+            can_replace = typer.confirm(
+                f"The file '{display_path}' alredy exists.\nDo you want to replace it ?"
+            )
+        if can_replace:
+            vscode_file.write_text(maestro_file.read_text())
+            CONSOLE.print(f"[green italic]'{display_path}' has been replaced.")
+        else:
+            CONSOLE.print(f"[red italic]'{display_path}' has not been replaced.")
+    return 0
+
+
+@app.command()
+def gitlab(
+    forced: Annotated[
+        bool, typer.Option("--forced", "-f", help="Replace all the files")
+    ] = False
+) -> int:
+    """Generate the templates for Gitlab."""
+    maestro_gitlab_path = Path(Path(__file__).parent, "gitlab")
+    gitlab_path = Path(Path.cwd(), ".gitlab")
+    for maestro_gitlab_subfolder in Path(maestro_gitlab_path).iterdir():
+        gitlab_subfolder = Path(gitlab_path, maestro_gitlab_subfolder.name)
+        for maestro_gitlab_file in maestro_gitlab_subfolder.iterdir():
+            gitlab_file = Path(gitlab_subfolder, maestro_gitlab_file.name)
+            can_write = True
+            display_path = f".gitlab/{gitlab_subfolder.name}/{gitlab_file.name}"
+            if not forced and gitlab_file.exists():
+                can_write = typer.confirm(
+                    f"The file '{display_path}' alredy exists.\nDo you want to replace it ?"
+                )
+            if not gitlab_file.parent.exists():
+                gitlab_file.parent.mkdir(parents=True, exist_ok=True)
+            if can_write:
+                is_new = not gitlab_file.exists()
+                gitlab_file.write_text(maestro_gitlab_file.read_text())
+                if is_new:
+                    CONSOLE.print(f"[green italic]'{display_path}' has been created.")
+                else:
+                    CONSOLE.print(f"[green italic]'{display_path}' has been replaced.")
+            else:
+                CONSOLE.print(f"[red italic]'{display_path}' has not been replaced.")
+    return 0
+
+
+def version_callback(has_version: bool) -> None:
+    if has_version:
+        if sys.version_info >= (3, 8):
+            from importlib.metadata import version as get_version
+        else:
+            from importlib_metadata import version as get_version
+
+        CONSOLE.print(get_version("maestro"))
+        raise typer.Exit
+
+
+@app.callback()
+def main(
+    version: Annotated[
+        bool,
+        typer.Option("--version", "-v", help="Get the version", callback=version_callback),
+    ] = False
+) -> None: ...
+
+
+if __name__ == "__main__":
+    app(prog_name="maestro")

@@ -1,15 +1,15 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools", "setuptools_scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
 keywords = ["maestro", "black", "ruff", "isort", "mypy", "pytest"]
 name = "maestro"
-authors = [{ name = "El Hadi Moussi", email = "moussi@phimeca.com" }]
 description = "Run commands to manage a python package."
 readme = "README.md"
-requires-python = ">=3.6"
+requires-python = ">=3.7"
 dependencies = [
+    "importlib-metadata;python_version<'3.8'",
     "typer",
     "pytest",
     "pytest-cov",
@@ -19,19 +19,118 @@ dependencies = [
     "black",
     "isort[requirements_deprecated_finder]",
     "wheel",
+    "toml",
+    "types-toml",
 ]
 dynamic = ["version"]
+[[project.authors]]
+name = "El Hadi Moussi"
+email = "elhadi.moussi@gmail.com"
 
 [project.scripts]
 maestro = "maestro.__main__:app"
+
+[tool.setuptools_scm]
+
+[tool.ruff]
+target-version = "py37"
+line-length = 95
+
+[tool.isort]
+sections = "LOCALFOLDER,FIRSTPARTY,THIRDPARTY,STDLIB,FUTURE"
+multi_line_output = 3
+line_length = 95
+use_parentheses = true
+include_trailing_comma = true
+force_grid_wrap = 0
+ensure_newline_before_comments = true
+
+[tool.mypy]
+[[tool.mypy.overrides]]
+module = ["importlib_metadata.*"]
+ignore_missing_imports = true
+
+[tool.ruff.lint]
+select = [
+    "F",
+    "E",
+    "W",
+    "N",
+    "UP",
+    "YTT",
+    "ANN",
+    "BLE",
+    "B",
+    "A",
+    "COM",
+    "C4",
+    "T10",
+    "EM",
+    "EXE",
+    "ISC",
+    "ICN",
+    "LOG",
+    "G",
+    "INP",
+    "PIE",
+    "T20",
+    "PYI",
+    "PT",
+    "Q",
+    "RSE",
+    "RET",
+    "SLOT",
+    "SLF",
+    "SIM",
+    "TID",
+    "TCH",
+    "INT",
+    "ARG",
+    "PTH",
+    "TD",
+    "PD",
+    "PGH",
+    "PL",
+    "TRY",
+    "FLY",
+    "NPY",
+    "PERF",
+    "FURB",
+    "RUF",
+]
+ignore = [
+    "ANN101",
+    "ANN102",
+    "ANN401",
+    "ARG001",
+    "ARG002",
+    "COM812",
+    "EM101",
+    "PD011",
+    "PLC1901",
+    "PLR0911",
+    "PLR0912",
+    "PLR0913",
+    "PLR0915",
+    "PLR2004",
+    "PTH123",
+    "RET501",
+    "RET505",
+    "RET506",
+    "SIM108",
+    "SIM116",
+    "TD002",
+    "TD003",
+    "TCH001",
+    "TCH002",
+    "TCH003",
+    "TRY002",
+    "TRY003",
+    "UP006",
+    "UP007",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["maestro"]
 exclude = ["tests"]
-
-[tool.setuptools.dynamic]
-version = { attr = "maestro.__version__" }
-
-[tool.black]
-line-length = 95

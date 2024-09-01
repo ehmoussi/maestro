@@ -1,0 +1,25 @@
+.flake8:
+    stage: linting
+    script:
+        - maestro flake8
+
+.ruff:
+    stage: linting
+    script:
+        - maestro ruff
+
+.black:
+    stage: linting
+    script:
+        - maestro black --check
+
+.isort:
+    stage: linting
+    script:
+        - maestro isort --check
+
+.mypy:
+    stage: typing
+    needs: []
+    script:
+        - maestro mypy
