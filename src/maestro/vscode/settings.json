@@ -1,0 +1,19 @@
+{
+    "editor.formatOnSave": true,
+    "black-formatter.args": [
+        "-l",
+        "95"
+    ],
+    "isort.args": [
+        "--settings-file",
+        "pyproject.toml"
+    ],
+    "ruff.lint.args": [
+        "--config=pyproject.toml"
+    ],
+    "mypy-type-checker.args": [
+        "--config-file=pyproject.toml"
+    ],
+    "mypy-type-checker.preferDaemon": true,
+    "mypy-type-checker.importStrategy": "fromEnvironment"
+}

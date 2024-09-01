@@ -1,0 +1,14 @@
+[flake8]
+max-line-length = 95
+extend-ignore = 
+    E203
+    PL123
+    R100
+    R501
+    R504
+    R505
+    R506
+    SIM104
+    SIM111
+    SIM116
+    SIM117

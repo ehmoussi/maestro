@@ -2,7 +2,7 @@
     stage: tests
     needs: []
     script:
-        - maestro test --cov --cov-report xml
+        - maestro test --cov --cov-report --xml
     artifacts:
       reports:
         junit: report.xml

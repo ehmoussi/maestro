@@ -1,0 +1,7 @@
+include src/maestro/cfg/flake8
+include src/maestro/cfg/ruff.toml
+include src/maestro/cfg/isort.cfg
+include src/maestro/py.typed
+include src/maestro/vscode/settings.json
+include src/maestro/gitlab/ci_template/*.yml
+include src/maestro/gitlab/issue_templates/*.md
