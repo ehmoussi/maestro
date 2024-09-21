@@ -150,6 +150,10 @@ def mypy(
         Optional[Path],
         typer.Option("--config_file", "-c"),
     ] = None,
+    file_or_dir: Annotated[
+        Optional[List[str]],
+        typer.Argument(help="Path to a file or directory"),
+    ] = None,
 ) -> int:
     r"""Run the mypy typer."""
     cmd = ["mypy", "--config-file"]
@@ -163,12 +167,16 @@ def mypy(
         raise ValueError(msg)
     cmd += [str(config_file)]
     cmd += ["--pretty", "--warn-unused-configs"]
-    if Path("src").exists():
-        cmd += ["src"]
+    if file_or_dir is None:
+        if Path("src").exists():
+            cmd += ["src"]
+        else:
+            raise ValueError("No 'src' folder found.")
+        if next(Path("tests").glob("**/*.py"), None) is not None:
+            cmd += ["tests"]
     else:
-        raise ValueError("No 'src' folder found.")
-    if next(Path("tests").glob("**/*.py"), None) is not None:
-        cmd += ["tests"]
+        for f in file_or_dir:
+            cmd += [f]
     return run_command(cmd)
 
 
