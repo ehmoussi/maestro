@@ -150,6 +150,16 @@ def mypy(
         Optional[Path],
         typer.Option("--config_file", "-c"),
     ] = None,
+    strict: Annotated[
+        Optional[bool],
+        typer.Option("--strict", "-s"),
+    ] = None,
+    pyqt5: Annotated[
+        Optional[bool], typer.Argument(help="Set to true use PyQt5 from QtPy")
+    ] = None,
+    pyside2: Annotated[
+        Optional[bool], typer.Argument(help="Set to true the use PySide2 from QtPy")
+    ] = None,
     file_or_dir: Annotated[
         Optional[List[str]],
         typer.Argument(help="Path to a file or directory"),
@@ -167,6 +177,22 @@ def mypy(
         raise ValueError(msg)
     cmd += [str(config_file)]
     cmd += ["--pretty", "--warn-unused-configs"]
+    if strict is not None:
+        cmd += ["--strict"]
+    if pyqt5 is not None:
+        cmd += [
+            "--always-true=PYQT5",
+            "--always-false=PYSIDE2",
+            "--always-false=PYQT6",
+            "--always-false=PYSIDE6",
+        ]
+    if pyside2 is not None:
+        cmd += [
+            "--always-true=PYQT5",
+            "--always-false=PYSIDE2",
+            "--always-false=PYQT6",
+            "--always-false=PYSIDE6",
+        ]
     if file_or_dir is None:
         if Path("src").exists():
             cmd += ["src"]
@@ -265,7 +291,7 @@ def linting() -> int:
         for f in linting_functions:
             progress.update(task, description=f"{f.__name__} start")
             try:
-                return_code = f()  # type: ignore[operator]
+                return_code = f()
             except typer.Exit as e:
                 return_code = e.exit_code
             if return_code == 0:
@@ -334,6 +360,14 @@ def test(
             help="Add coverage and generate an xml or/and html report",
         ),
     ] = None,
+    coverage_only: Annotated[
+        Optional[List[Path]],
+        typer.Option(
+            "--coverage-only",
+            "--cov-only",
+            help="Add coverage only for the given files",
+        ),
+    ] = None,
 ) -> int:
     r"""Run the tests."""
     cmd = ["pytest", "-vv"]
@@ -341,8 +375,24 @@ def test(
         cmd += ["-n", "auto", "--dist", "loadfile"]
     if only_failed:
         cmd += ["--lf"]
-    if coverage or coverage_report is not None:
-        cmd += ["--cov=src", "--cov-report=term-missing:skip-covered"]
+    if coverage or coverage_report is not None or coverage_only is not None:
+        if coverage or coverage_report is not None:
+            cmd += ["--cov=src", "--cov-report=term-missing:skip-covered"]
+        elif coverage_only is not None:
+            for cov_filepath in coverage_only:
+                if cov_filepath.is_file():
+                    cov_python_import = (
+                        str(Path(*cov_filepath.parts[1:]))
+                        .replace("//", ".")
+                        .replace("\\\\", ".")
+                        .replace("/", ".")
+                        .replace("\\", ".")
+                        .replace(".py", "")
+                    )
+                    cmd += [f"--cov={cov_python_import}"]
+                else:
+                    cmd += [f"--cov={cov_filepath}"]
+            cmd += ["--cov-report=term-missing:skip-covered"]
         if coverage_report is not None:
             if "xml" in map(str, coverage_report):
                 cmd += ["--cov-report=xml", "--junitxml=report.xml"]
