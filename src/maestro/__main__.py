@@ -155,11 +155,17 @@ def mypy(
         typer.Option("--strict", "-s"),
     ] = None,
     pyqt5: Annotated[
-        Optional[bool], typer.Argument(help="Set to true use PyQt5 from QtPy")
-    ] = None,
+        Optional[bool], typer.Option("--pyqt5", help="Set to true use PyQt5 from QtPy")
+    ] = True,
+    pyqt6: Annotated[
+        Optional[bool], typer.Option("--pyqt6", help="Set to true the use PyQt6 from QtPy")
+    ] = False,
     pyside2: Annotated[
-        Optional[bool], typer.Argument(help="Set to true the use PySide2 from QtPy")
-    ] = None,
+        Optional[bool], typer.Option("--pyside2", help="Set to true the use PySide2 from QtPy")
+    ] = False,
+    pyside6: Annotated[
+        Optional[bool], typer.Option("--pyside6", help="Set to true the use PySide6 from QtPy")
+    ] = False,
     file_or_dir: Annotated[
         Optional[List[str]],
         typer.Argument(help="Path to a file or directory"),
@@ -179,18 +185,32 @@ def mypy(
     cmd += ["--pretty", "--warn-unused-configs"]
     if strict is not None:
         cmd += ["--strict"]
-    if pyqt5 is not None:
+    if pyqt6:
         cmd += [
-            "--always-true=PYQT5",
+            "--always-false=PYQT5",
+            "--always-true=PYQT6",
             "--always-false=PYSIDE2",
-            "--always-false=PYQT6",
             "--always-false=PYSIDE6",
         ]
-    if pyside2 is not None:
+    elif pyside2:
+        cmd += [
+            "--always-false=PYQT5",
+            "--always-false=PYQT6",
+            "--always-true=PYSIDE2",
+            "--always-false=PYSIDE6",
+        ]
+    elif pyside6:
+        cmd += [
+            "--always-false=PYQT5",
+            "--always-false=PYQT6",
+            "--always-false=PYSIDE2",
+            "--always-true=PYSIDE6",
+        ]
+    else:
         cmd += [
             "--always-true=PYQT5",
-            "--always-false=PYSIDE2",
             "--always-false=PYQT6",
+            "--always-false=PYSIDE2",
             "--always-false=PYSIDE6",
         ]
     if file_or_dir is None:
@@ -444,8 +464,22 @@ def wheel(
     return run_command(cmd)
 
 
+class QtAPI(Enum):
+    PYQT5 = 1
+    PYSIDE6 = 2
+
+
 @app.command()
-def icons() -> int:
+def icons(
+    qt_api: Annotated[
+        QtAPI,
+        typer.Option(
+            "--qt",
+            "--qt-api",
+            help="Specify the Qt binding version. By default PyQt5 is used",
+        ),
+    ] = QtAPI.PYQT5,
+) -> int:
     """Generate the icons.py file from the qrc file."""
     packages = find_packages_in_src()
     package_name = Prompt.ask("Select a package", choices=packages, default=packages[0])
@@ -461,9 +495,12 @@ def icons() -> int:
         msg = f"'{qrc_file}' doesn't exists. Can't generate the 'icons.py' file."
         raise ValueError(msg)
     py_file = Path(qrc_file.parent, "icons.py")
+    pyrcc_command = "pyrcc5"
+    if qt_api == QtAPI.PYSIDE6:
+        pyrcc_command = "pyside6-rcc"
     return run_command(
         [
-            "pyrcc5",
+            pyrcc_command,
             # "-name",
             # "initialize",
             str(qrc_file),
