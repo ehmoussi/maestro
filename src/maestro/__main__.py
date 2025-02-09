@@ -475,7 +475,6 @@ def icons(
         QtAPI,
         typer.Option(
             "--qt",
-            "--qt-api",
             help="Specify the Qt binding version. By default PyQt5 is used",
         ),
     ] = QtAPI.PYQT5,
