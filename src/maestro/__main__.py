@@ -56,6 +56,12 @@ def find_packages_in_src() -> List[str]:
     ]
 
 
+def find_icons_qrc_file(package_name: str) -> Optional[Path]:
+    for f in Path("src", package_name).glob("**/icons.qrc"):
+        return f
+    return None
+
+
 @app.command()
 def ruff(
     fix: bool = False,
@@ -478,12 +484,22 @@ def icons(
             help="Specify the Qt binding version. By default PyQt5 is used",
         ),
     ] = QtAPI.PYQT5,
+    output_file: Annotated[
+        Optional[Path],
+        typer.Option(
+            "-o",
+            help=(
+                "Ouput python file containing the icons. "
+                "By default icons.py in the same directory as the icons.qrc file"
+            ),
+        ),
+    ] = None,
 ) -> int:
     """Generate the icons.py file from the qrc file."""
     packages = find_packages_in_src()
     package_name = Prompt.ask("Select a package", choices=packages, default=packages[0])
-    qrc_file = Path("src", package_name, "icons", "icons.qrc")
-    if not qrc_file.exists():
+    qrc_file = find_icons_qrc_file(package_name)
+    if qrc_file is None or not qrc_file.exists():
         CONSOLE.print(f"'{qrc_file}' doesn't exists")
         qrc_file_str = Prompt.ask("Enter the qrc file path")
         qrc_file = Path(qrc_file_str)
@@ -493,7 +509,10 @@ def icons(
     if not qrc_file.exists():
         msg = f"'{qrc_file}' doesn't exists. Can't generate the 'icons.py' file."
         raise ValueError(msg)
-    py_file = Path(qrc_file.parent, "icons.py")
+    if output_file is None:
+        py_file = Path(qrc_file.parent, "icons.py")
+    else:
+        py_file = output_file
     pyrcc_command = "pyrcc5"
     if qt_api == QtAPI.PYSIDE6:
         pyrcc_command = "pyside6-rcc"
