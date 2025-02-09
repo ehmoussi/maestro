@@ -465,8 +465,8 @@ def wheel(
 
 
 class QtAPI(Enum):
-    PYQT5 = 1
-    PYSIDE6 = 2
+    PYQT5 = "pyqt5"
+    PYSIDE6 = "pyside6"
 
 
 @app.command()
