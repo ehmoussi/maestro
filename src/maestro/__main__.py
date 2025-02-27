@@ -299,7 +299,7 @@ def isort(
 
 
 @app.command()
-def linting() -> int:
+def linting(files: Optional[List[str]] = None) -> int:
     """Apply black, isort, linting with ruff and check types with mypy."""
     return_code = 0
     with Progress(

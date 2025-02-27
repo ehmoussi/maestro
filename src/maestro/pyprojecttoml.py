@@ -110,8 +110,6 @@ def ruff(
         "RUF",
     ]
     pyproject_toml["tool"]["ruff"]["lint"]["ignore"] = [
-        "ANN101",  # self doesn't need a type
-        "ANN102",  # cls doesn't need a type
         "ANN401",  # useful for salome or qt objects
         "ARG001",  # useful to keep the same signature for the slot functions
         "ARG002",  # if you inherit a method the unused args are necessary
@@ -132,9 +130,9 @@ def ruff(
         "SIM116",
         "TD002",
         "TD003",
-        "TCH001",
-        "TCH002",
-        "TCH003",
+        "TC001",
+        "TC002",
+        "TC003",
         "TRY002",
         "TRY003",
         "UP006",
