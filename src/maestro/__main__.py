@@ -487,6 +487,7 @@ def icons(
     output_file: Annotated[
         Optional[Path],
         typer.Option(
+            "--output",
             "-o",
             help=(
                 "Ouput python file containing the icons. "
