@@ -17,7 +17,7 @@ dependencies = [
     "ruff",
     "mypy",
     "black",
-    "isort[requirements_deprecated_finder]",
+    "isort",
     "wheel",
     "toml",
     "types-toml",
