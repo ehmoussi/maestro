@@ -7,7 +7,7 @@ keywords = ["maestro", "black", "ruff", "isort", "mypy", "pytest"]
 name = "maestro"
 description = "Run commands to manage a python package."
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.6"
 dependencies = [
     "importlib-metadata;python_version<'3.8'",
     "typer",
